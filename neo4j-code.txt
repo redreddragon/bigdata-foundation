@@ -1,0 +1,165 @@
+# Dijkstra：
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.shortestPath.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost',
+      orientation: 'NATURAL'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  relationshipWeightProperty: 'cost'
+})
+YIELD nodeId, cost
+RETURN gds.util.asNode(nodeId).NodeId AS NodeId,cost
+
+# 返回结果修改
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.shortestPath.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost',
+      orientation: 'NATURAL'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  relationshipWeightProperty: 'cost',
+  writeProperty: 'sssp'
+})
+YIELD nodeId, cost
+RETURN count(nodeId) as PathNodeNumber,Max(cost) as totalcost
+
+
+# 单源最短路径算法（Single Source Shortest Path）
+MATCH (n:Node {NodeId: '2022'})
+CALL gds.alpha.shortestPath.deltaStepping.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost'
+    }
+  },
+  startNode: n,
+  relationshipWeightProperty: 'cost',
+  delta: 3.0
+})
+YIELD nodeId, distance
+RETURN collect(gds.util.asNode(nodeId).NodeId)[29920..29930] AS NodeId,collect(distance)[29920..29930] as distance
+
+# All Pairs Shortest Path
+CALL gds.alpha.allShortestPaths.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost'
+    }
+  },
+  relationshipWeightProperty: 'cost'
+})
+YIELD sourceNodeId, targetNodeId, distance
+WITH sourceNodeId, targetNodeId, distance
+WHERE gds.util.isFinite(distance) = true
+
+MATCH (source:Node) WHERE id(source) = sourceNodeId
+MATCH (target:Node) WHERE id(target) = targetNodeId
+WITH source, target, distance WHERE source <> target
+
+RETURN source.NodeId AS source, target.NodeId AS target, distance
+ORDER BY distance DESC, source ASC, target ASC
+LIMIT 10
+
+# A*算法
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.shortestPath.astar.stream({
+  nodeProjection: {
+    Node: {
+      properties: ['XCoord', 'YCoord']
+    }
+  },
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      orientation: 'NATURAL',
+      properties: 'cost'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  relationshipWeightProperty: 'cost',
+  propertyKeyLat: 'XCoord',
+  propertyKeyLon: 'YCoord'
+})
+YIELD nodeId, cost
+RETURN gds.util.asNode(nodeId).NodeId AS NodeId, cost
+
+# A*算法返回结果修改
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.shortestPath.astar.stream({
+  nodeProjection: {
+    Node: {
+      properties: ['XCoord', 'YCoord']
+    }
+  },
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      orientation: 'NATURAL',
+      properties: 'cost'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  relationshipWeightProperty: 'cost',
+  propertyKeyLat: 'XCoord',
+  propertyKeyLon: 'YCoord'
+})
+YIELD nodeId, cost
+RETURN count(nodeId) as PathNodeNumber,Max(cost) as totalcost
+
+# Yen’s K-shortest paths算法
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.kShortestPaths.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  k: 3,
+  relationshipWeightProperty: 'cost'
+})
+YIELD index, nodeIds, costs
+RETURN [node IN gds.util.asNodes(nodeIds) | node.NodeId] AS places,
+       costs,
+       reduce(acc = 0.0, cost IN costs | acc + cost) AS totalCost
+
+#Yen’s K-shortest paths算法路径展示
+MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
+CALL gds.alpha.kShortestPaths.stream({
+  nodeProjection: 'Node',
+  relationshipProjection: {
+    ROAD: {
+      type: 'ROAD',
+      properties: 'cost'
+    }
+  },
+  startNode: start,
+  endNode: end,
+  k: 3,
+  relationshipWeightProperty: 'cost',
+  path: true
+})
+YIELD path
+RETURN path
+LIMIT 1

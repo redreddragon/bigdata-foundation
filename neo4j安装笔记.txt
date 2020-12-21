@@ -1,0 +1,272 @@
+单主机集群启动
+docker network create --driver=bridge cluster
+
+docker run --name=core1 --detach --network=cluster \
+    --publish=7474:7474 --publish=7473:7473 --publish=7687:7687 \
+    --hostname=core1 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:7687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:7474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:7473 \
+    --volume=$HOME/neo4j/data1:/data \
+    --env NEO4J_AUTH=none \
+    neo4j:4.2-enterprise
+
+docker run --name=core2 --detach --network=cluster \
+    --publish=8474:7474 --publish=8473:7473 --publish=8687:7687 \
+    --hostname=core2 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:8687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:8474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:8473 \
+    --volume=$HOME/neo4j/data2:/data \
+    --env NEO4J_AUTH=none \
+    neo4j:4.2-enterprise
+
+docker run --name=core3 --detach --network=cluster \
+    --publish=9474:7474 --publish=9473:7473 --publish=9687:7687 \
+    --hostname=core3 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:9687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:9474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:9473 \
+    --volume=$HOME/neo4j/data3:/data \
+    --env NEO4J_AUTH=none \
+    neo4j:4.2-enterprise
+
+# 单主机增加节点
+docker run --name=core5 --detach --network=cluster \
+    --publish=12474:7474 --publish=12473:7473 --publish=12687:7687 \
+    --hostname=core5 \
+    --env NEO4J_dbms_mode=CORE  \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:12687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:12474 \
+    neo4j:4.2-enterprise
+
+
+单节点启动
+docker run -d \
+    --publish=10474:7474 --publish=10687:7687 \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:10687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:10474 \
+    --volume=$HOME/neo4j/data:/data \
+    --name neo4j-standalone \
+    --env=NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_mode=SINGLE \
+    neo4j:4.2-enterprise
+
+集群版持久化访问接口：
+node1: http://10.103.12.65:7474
+node2: http://10.103.12.66:7474
+node3: http://10.103.12.67:7474
+用户/密码：neo4j/123456
+:sysinfo
+可以查看集群信息
+
+集群版访问接口：
+leader: http://10.103.12.70:7474
+follower1: http://10.103.12.70:8474
+follower2: http://10.103.12.70:9474
+无密码，直接点connect可以连接
+连接后输入
+:sysinfo
+可以查看集群信息
+
+单机版访问接口：
+http://10.103.12.70:10474
+用户/密码：neo4j/123456
+单机版之所以有用户密码，是因为做了数据持久化，非开发模式下必须配置密码
+连接后输入
+:sysinfo
+可以查看单机版信息
+
+集群中增加一个节点：
+docker run --name=core4 --detach --network=cluster \
+    --publish=11474:7474 --publish=11473:7473 --publish=11687:7687 \
+    --hostname=core4 \
+    --env NEO4J_dbms_mode=CORE  \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:11687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:11474 \
+    --env NEO4J_AUTH=none \
+    neo4j:4.0-enterprise
+
+导入节点数据
+:auto USING PERIODIC COMMIT 2000
+LOAD CSV WITH HEADERS FROM 'file:///Shenzhen_Edgelist.csv' AS row
+WITH row.START_NODE AS START_NODE, toFloat(row.XCoord) AS XCoord,  toFloat(row.YCoord) AS YCoord
+MERGE (n:Node {NodeId: START_NODE, XCoord: XCoord, YCoord: YCoord})
+RETURN count(n);
+
+导入边的关系
+:auto USING PERIODIC COMMIT 500
+LOAD CSV WITH HEADERS FROM 'file:///Shenzhen_Edgelist.csv' AS row
+WITH row.START_NODE AS START_NODE, row.END_NODE AS END_NODE, row.EDGE AS EDGE, toFloat(row.LENGTH) AS unitCost
+MATCH (n1:Node {NodeId: START_NODE})
+MATCH (n2:Node {NodeId: END_NODE})
+MERGE (n1)-[:ROAD {roadId: EDGE,cost: unitCost}]->(n2)
+RETURN *
+
+删除所有边
+MATCH ()-[r]->() delete r
+
+删除所有节点
+MATCH (n) delete n
+
+查看节点数
+MATCH (n) RETURN count(n)
+
+
+
+
+持久化集群启动（存在问题：无法修改密码，也无法执行命令）
+docker run --name=core1 --detach --network=cluster \
+    --publish=7474:7474 --publish=7473:7473 --publish=7687:7687 \
+    --hostname=core1 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:7687 \
+    --env NEO4J_dbms_connector_bolt_listen__address=localhost:7687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:7474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:7473 \
+    --volume=$HOME/neo4j/data1:/data \
+    neo4j:4.2-enterprise
+
+docker run --name=core2 --detach --network=cluster \
+    --publish=8474:7474 --publish=8473:7473 --publish=8687:7687 \
+    --hostname=core2 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:8687 \
+    --env NEO4J_dbms_connector_bolt_listen__address=localhost:8687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:8474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:8473 \
+    --volume=$HOME/neo4j/data2:/data \
+    neo4j:4.2-enterprise
+
+docker run --name=core3 --detach --network=cluster \
+    --publish=9474:7474 --publish=9473:7473 --publish=9687:7687 \
+    --hostname=core3 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=core1:5000,core2:5000,core3:5000 \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --env NEO4J_dbms_connector_bolt_advertised__address=localhost:9687 \
+    --env NEO4J_dbms_connector_bolt_listen__address=localhost:9687 \
+    --env NEO4J_dbms_connector_http_advertised__address=localhost:9474 \
+    --env NEO4J_dbms_connector_https_advertised__address=localhost:9473 \
+    --volume=$HOME/neo4j/data3:/data \
+    neo4j:4.2-enterprise
+
+
+不同宿主机集群搭建
+export HOME=/opt/neo4j_cluster
+export core_addr=10.103.12.68
+docker run --name=neo4j-core --detach \
+    --network=host \
+    --publish=7474:7474 --publish=7687:7687 \
+    --publish=5000:5000 --publish=6000:6000 --publish=7000:7000 \
+    --env NEO4J_dbms_mode=CORE \
+    --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+    --env NEO4J_causal__clustering_initial__discovery__members=10.103.12.66:5000,10.103.12.67:5000,10.103.12.68:5000 \
+    --env NEO4J_causal__clustering_discovery__advertised__address=$core_addr:5000 \
+    --env NEO4J_causal__clustering_transaction__advertised__address=$core_addr:6000 \
+    --env NEO4J_causal__clustering_raft__advertised__address=$core_addr:7000 \
+    --env NEO4J_dbms_connectors_default__advertised__address=$core_addr \
+    --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+    --volume=$HOME/data:/data \
+    --volume=$HOME/logs:/logs \
+    --volume=$HOME/import:/import \
+    --volume=$HOME/plugins:/plugins \
+    --env NEO4J_dbms_memory_pagecache_size=4G \
+    --env NEO4J_dbms_connector_bolt_enabled=true \
+    --env NEO4J_dbms_connector_bolt_listen__address=:7687 \
+    --env NEO4J_dbms_connector_bolt_advertised__address=:7687 \
+    --env NEO4J_dbms_connector_http_advertised__address=:7474 \
+    neo4j:4.2-enterprise
+
+# 不能使用变量名代替，而是必须使用ip直接写死，在不同的服务器上分别执行
+docker run --name=neo4j-core --detach \
+         --network=host \
+         --publish=7474:7474 --publish=7687:7687 \
+         --publish=5000:5000 --publish=6000:6000 --publish=7000:7000 \
+         --hostname=10.103.12.65 \
+         --env NEO4J_dbms_mode=CORE \
+         --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+         --env NEO4J_causal__clustering_initial__discovery__members=10.103.12.66:5000,10.103.12.67:5000,10.103.12.65:5000 \
+         --env NEO4J_causal__clustering_discovery__advertised__address=10.103.12.65:5000 \
+         --env NEO4J_causal__clustering_transaction__advertised__address=10.103.12.65:6000 \
+         --env NEO4J_causal__clustering_raft__advertised__address=10.103.12.65:7000 \
+         --env NEO4J_dbms_connectors_default__advertised__address=10.103.12.65 \
+         --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+         --env NEO4J_dbms_connector_bolt_advertised__address=10.103.12.65:7687 \
+         --env NEO4J_dbms_connector_http_advertised__address=10.103.12.65:7474 \
+         --volume=/opt/neo4j_cluster/data:/data \
+         --volume=/opt/neo4j_cluster/logs:/logs \
+         --volume=/opt/neo4j_cluster/import:/import \
+         --volume=/opt/neo4j_cluster/plugins:/plugins \
+         neo4j:4.2-enterprise
+
+
+docker run --name=neo4j-core --detach \
+         --network=host \
+         --publish=7474:7474 --publish=7687:7687 \
+         --publish=5000:5000 --publish=6000:6000 --publish=7000:7000 \
+         --hostname=10.103.12.66 \
+         --env NEO4J_dbms_mode=CORE \
+         --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+         --env NEO4J_causal__clustering_initial__discovery__members=10.103.12.66:5000,10.103.12.67:5000,10.103.12.65:5000 \
+         --env NEO4J_causal__clustering_discovery__advertised__address=10.103.12.66:5000 \
+         --env NEO4J_causal__clustering_transaction__advertised__address=10.103.12.66:6000 \
+         --env NEO4J_causal__clustering_raft__advertised__address=10.103.12.66:7000 \
+         --env NEO4J_dbms_connectors_default__advertised__address=10.103.12.66 \
+         --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+         --env NEO4J_dbms_connector_bolt_advertised__address=10.103.12.66:7687 \
+         --env NEO4J_dbms_connector_http_advertised__address=10.103.12.66:7474 \
+         --volume=/opt/neo4j_cluster/data:/data \
+         --volume=/opt/neo4j_cluster/logs:/logs \
+         --volume=/opt/neo4j_cluster/import:/import \
+         --volume=/opt/neo4j_cluster/plugins:/plugins \
+         neo4j:4.2-enterprise
+
+docker run --name=neo4j-core --detach \
+         --network=host \
+         --publish=7474:7474 --publish=7687:7687 \
+         --publish=5000:5000 --publish=6000:6000 --publish=7000:7000 \
+         --hostname=10.103.12.67 \
+         --env NEO4J_dbms_mode=CORE \
+         --env NEO4J_causal__clustering_expected__core__cluster__size=3 \
+         --env NEO4J_causal__clustering_initial__discovery__members=10.103.12.66:5000,10.103.12.67:5000,10.103.12.65:5000 \
+         --env NEO4J_causal__clustering_discovery__advertised__address=10.103.12.67:5000 \
+         --env NEO4J_causal__clustering_transaction__advertised__address=10.103.12.67:6000 \
+         --env NEO4J_causal__clustering_raft__advertised__address=10.103.12.67:7000 \
+         --env NEO4J_dbms_connectors_default__advertised__address=10.103.12.67 \
+         --env NEO4J_ACCEPT_LICENSE_AGREEMENT=yes \
+         --env NEO4J_dbms_connector_bolt_advertised__address=10.103.12.67:7687 \
+         --env NEO4J_dbms_connector_http_advertised__address=10.103.12.67:7474 \
+         --volume=/opt/neo4j_cluster/data:/data \
+         --volume=/opt/neo4j_cluster/logs:/logs \
+         --volume=/opt/neo4j_cluster/import:/import \
+         --volume=/opt/neo4j_cluster/plugins:/plugins \
+         neo4j:4.2-enterprise
+
+
+依赖库修改：
+dbms.security.procedures.unrestricted=gds.*,jwt.security.*
+dbms.security.procedures.whitelist=gds.*
