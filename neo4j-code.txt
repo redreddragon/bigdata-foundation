@@ -16,7 +16,7 @@ CALL gds.alpha.shortestPath.stream({
 YIELD nodeId, cost
 RETURN gds.util.asNode(nodeId).NodeId AS NodeId,cost
 
-# 返回结果修改
+# Dijkstra：返回结果修改
 MATCH (start:Node {NodeId: '2022'}), (end:Node {NodeId: '80240'})
 CALL gds.alpha.shortestPath.stream({
   nodeProjection: 'Node',
